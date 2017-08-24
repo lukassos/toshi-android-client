@@ -38,4 +38,11 @@ public class Init {
 
         return this;
     }
+
+    public Init construct(final String paymentAddress,
+                          final String language) {
+        this.paymentAddress = paymentAddress;
+        this.language = language;
+        return this;
+    }
 }

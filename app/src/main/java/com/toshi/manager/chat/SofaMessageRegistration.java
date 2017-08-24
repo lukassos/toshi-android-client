@@ -27,10 +27,11 @@ import com.toshi.manager.network.IdService;
 import com.toshi.model.local.Recipient;
 import com.toshi.model.local.User;
 import com.toshi.model.network.UserSearchResults;
-import com.toshi.model.sofa.Message;
+import com.toshi.model.sofa.Init;
 import com.toshi.model.sofa.SofaAdapters;
 import com.toshi.model.sofa.SofaMessage;
 import com.toshi.util.GcmUtil;
+import com.toshi.util.LocaleUtil;
 import com.toshi.util.LogUtil;
 import com.toshi.util.SharedPrefsUtil;
 import com.toshi.view.BaseApplication;
@@ -162,8 +163,11 @@ public class SofaMessageRegistration {
     }
 
     private SofaMessage generateOnboardingMessage(final User localUser) {
-        final Message sofaMessage = new Message().setBody("");
-        final String messageBody = SofaAdapters.get().toJson(sofaMessage);
+        final Init init = new Init().construct(
+                localUser.getPaymentAddress(),
+                LocaleUtil.getLocale().getLanguage()
+        );
+        final String messageBody = SofaAdapters.get().toJson(init);
         return new SofaMessage().makeNew(localUser, messageBody);
     }
 
