@@ -45,7 +45,6 @@ import com.toshi.model.local.Recipient;
 import com.toshi.model.local.User;
 import com.toshi.model.sofa.Command;
 import com.toshi.model.sofa.Control;
-import com.toshi.model.sofa.Init;
 import com.toshi.model.sofa.Message;
 import com.toshi.model.sofa.PaymentRequest;
 import com.toshi.model.sofa.SofaAdapters;
@@ -57,7 +56,6 @@ import com.toshi.util.ChatNavigation;
 import com.toshi.util.FileUtil;
 import com.toshi.util.ImageUtil;
 import com.toshi.util.KeyboardUtil;
-import com.toshi.util.LocaleUtil;
 import com.toshi.util.LogUtil;
 import com.toshi.util.OnSingleClickListener;
 import com.toshi.util.PaymentType;
@@ -727,20 +725,17 @@ public final class ChatPresenter implements Presenter<ChatActivity> {
     }
 
     private void tryInitAppConversation() {
-        if (this.recipient.isGroup() || !this.recipient.getUser().isApp()) return;
-
-        final User user = getCurrentLocalUser();
-        final Init init = new Init().construct(
-                user.getPaymentAddress(),
-                LocaleUtil.getLocale().getLanguage()
-        );
-        final String messageBody = SofaAdapters.get().toJson(init);
-        final SofaMessage sofaMessage = new SofaMessage().makeNew(user, messageBody);
+        if (!shouldInitConversation() || this.recipient.isGroup()
+                || !this.recipient.getUser().isApp()) return;
 
         BaseApplication
                 .get()
                 .getSofaMessageManager()
-                .sendMessage(this.recipient, sofaMessage);
+                .sendInitMessage(this.recipient);
+    }
+
+    private boolean shouldInitConversation() {
+        return this.activity.getIntent().getBooleanExtra(ChatActivity.EXTRA__INIT_MESSAGE, true);
     }
 
     private void initMessageObservables() {

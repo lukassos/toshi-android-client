@@ -19,14 +19,17 @@ package com.toshi.presenter;
 
 import android.content.Intent;
 import android.support.annotation.StringRes;
+import android.support.v4.app.TaskStackBuilder;
 import android.view.View;
 import android.widget.Toast;
 
 import com.toshi.R;
+import com.toshi.manager.chat.SofaMessageRegistration;
 import com.toshi.util.LogUtil;
 import com.toshi.util.SharedPrefsUtil;
 import com.toshi.util.TermsDialog;
 import com.toshi.view.BaseApplication;
+import com.toshi.view.activity.ChatActivity;
 import com.toshi.view.activity.LandingActivity;
 import com.toshi.view.activity.MainActivity;
 import com.toshi.view.activity.SignInActivity;
@@ -103,13 +106,26 @@ public class LandingPresenter implements Presenter<LandingActivity> {
 
     private void handleWalletSuccess() {
         stopLoadingTask();
-        goToMainActivity();
+        goToChatActivity();
     }
 
-    private void goToMainActivity() {
+    private void goToChatActivity() {
         SharedPrefsUtil.setSignedIn();
-        final Intent intent = new Intent(this.activity, MainActivity.class);
-        this.activity.startActivity(intent);
+
+        final Intent mainIntent = new Intent(BaseApplication.get(), MainActivity.class)
+                .putExtra(MainActivity.EXTRA__ACTIVE_TAB, 1);
+
+        final Intent chatIntent = new Intent(BaseApplication.get(), ChatActivity.class)
+                .putExtra(ChatActivity.EXTRA__THREAD_ID, SofaMessageRegistration.ONBOARDING_BOT_ID)
+                .putExtra(ChatActivity.EXTRA__INIT_MESSAGE, false)
+                .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
+
+        final TaskStackBuilder nextIntent = TaskStackBuilder.create(BaseApplication.get())
+                .addParentStack(MainActivity.class)
+                .addNextIntent(mainIntent)
+                .addNextIntent(chatIntent);
+
+        this.activity.startActivities(nextIntent.getIntents());
         this.activity.finish();
     }
 

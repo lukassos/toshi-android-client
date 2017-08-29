@@ -39,13 +39,16 @@ import com.toshi.view.BaseApplication;
 import org.whispersystems.libsignal.util.guava.Optional;
 
 import java.io.IOException;
+import java.util.concurrent.TimeUnit;
 
 import rx.Completable;
+import rx.Single;
 import rx.schedulers.Schedulers;
 
 public class SofaMessageRegistration {
 
     private static final String ONBOARDING_BOT_NAME = "ToshiBot";
+    public static final String ONBOARDING_BOT_ID = "0xdc1eb58ae581c2e70dd5af5c454851fa2b24acd7";
     private static final String CHAT_SERVICE_SENT_TOKEN_TO_SERVER = "chatServiceSentTokenToServer";
 
     private final SharedPreferences sharedPreferences;
@@ -72,7 +75,11 @@ public class SofaMessageRegistration {
                     .registerKeys(this.protocolStore)
                     .andThen(setRegisteredWithServer())
                     .andThen(registerGcm(true))
-                    .doOnCompleted(this::tryTriggerOnboarding);
+                    .andThen(tryTriggerOnboarding())
+                    .doOnSuccess(this::sendOnboardingMessageToOnboardingBot)
+                    .toCompletable()
+                    .andThen(setHasOnboarded())
+                    .delay(1000, TimeUnit.MILLISECONDS); // Add small delay to wait for bot response
         } else {
             return registerGcm(false)
                     .doOnCompleted(this::tryTriggerOnboarding);
@@ -81,6 +88,11 @@ public class SofaMessageRegistration {
 
     private boolean haveRegisteredWithServer() {
         return SignalPreferences.getRegisteredWithServer();
+    }
+
+    private Completable setHasOnboarded() {
+        SharedPrefsUtil.setHasOnboarded(true);
+        return Completable.complete();
     }
 
     private Completable setRegisteredWithServer() {
@@ -120,10 +132,14 @@ public class SofaMessageRegistration {
         .subscribeOn(Schedulers.io());
     }
 
-    private void tryTriggerOnboarding() {
-        if (SharedPrefsUtil.hasOnboarded()) return;
+    private void setSentToSever(final String key, final boolean value) {
+        this.sharedPreferences.edit().putBoolean(key, value).apply();
+    }
 
-        IdService.getApi()
+    private Single<User> tryTriggerOnboarding() {
+        if (SharedPrefsUtil.hasOnboarded()) return Single.just(null);
+
+        return IdService.getApi()
                 .searchByUsername(ONBOARDING_BOT_NAME)
                 .subscribeOn(Schedulers.io())
                 .observeOn(Schedulers.io())
@@ -132,47 +148,20 @@ public class SofaMessageRegistration {
                 .flatMapIterable(users -> users)
                 .filter(user -> user.getUsernameForEditing().equals(ONBOARDING_BOT_NAME))
                 .toSingle()
-                .subscribe(
-                        this::sendOnboardingMessageToOnboardingBot,
-                        this::handleOnboardingBotError
-                );
+                .doOnError(this::handleOnboardingBotError)
+                .onErrorReturn(__ -> null);
     }
 
     private void sendOnboardingMessageToOnboardingBot(final User onboardingBot) {
+        if (onboardingBot == null) return;
         BaseApplication
                 .get()
-                .getUserManager()
-                .getCurrentUser()
-                .map(this::generateOnboardingMessage)
-                .doOnSuccess(__ -> SharedPrefsUtil.setHasOnboarded())
-                .subscribe(
-                        onboardingMessage -> this.sendOnboardingMessage(onboardingMessage, new Recipient(onboardingBot)),
-                        this::handleOnboardingBotError
-                );
+                .getSofaMessageManager()
+                .sendInitMessage(new Recipient(onboardingBot));
     }
 
     private void handleOnboardingBotError(final Throwable throwable) {
         LogUtil.exception(getClass(), "Error during sending onboarding message to bot", throwable);
-    }
-
-    private void sendOnboardingMessage(final SofaMessage onboardingMessage, final Recipient onboardingBot) {
-        BaseApplication
-                .get()
-                .getSofaMessageManager()
-                .sendMessage(onboardingBot, onboardingMessage);
-    }
-
-    private SofaMessage generateOnboardingMessage(final User localUser) {
-        final Init init = new Init().construct(
-                localUser.getPaymentAddress(),
-                LocaleUtil.getLocale().getLanguage()
-        );
-        final String messageBody = SofaAdapters.get().toJson(init);
-        return new SofaMessage().makeNew(localUser, messageBody);
-    }
-
-    private void setSentToSever(final String key, final boolean value) {
-        this.sharedPreferences.edit().putBoolean(key, value).apply();
     }
 
     public Completable tryUnregisterGcm() {

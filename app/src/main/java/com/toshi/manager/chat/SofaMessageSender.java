@@ -128,6 +128,9 @@ public class SofaMessageSender {
             case SofaMessageTask.UPDATE_MESSAGE:
                 updateExistingMessage(messageTask.getReceiver(), messageTask.getSofaMessage());
                 break;
+            case SofaMessageTask.SEND_INIT:
+                sendInitMessageToBot(messageTask);
+                break;
         }
     }
 
@@ -254,6 +257,17 @@ public class SofaMessageSender {
                 updateExistingMessage(receiver, message);
                 savePendingMessage(receiver, message);
             }
+        }
+    }
+
+    private void sendInitMessageToBot(final SofaMessageTask messageTask) {
+        final Recipient receiver = messageTask.getReceiver();
+        try {
+            sendToSignal(receiver.getUser().getToshiId(), messageTask);
+        } catch (IOException e) {
+            LogUtil.error(getClass(), e.toString());
+        } catch (UntrustedIdentityException e) {
+            LogUtil.error(getClass(), "Keys have changed. " + e);
         }
     }
 

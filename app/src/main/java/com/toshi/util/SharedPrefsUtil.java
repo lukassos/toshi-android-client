@@ -40,9 +40,9 @@ public class SharedPrefsUtil {
         return prefs.getBoolean(HAS_ONBOARDED, false);
     }
 
-    public static void setHasOnboarded() {
+    public static void setHasOnboarded(final boolean hasOnboarded) {
         final SharedPreferences prefs = BaseApplication.get().getSharedPreferences(FileNames.USER_PREFS, Context.MODE_PRIVATE);
-        prefs.edit().putBoolean(HAS_ONBOARDED, true).apply();
+        prefs.edit().putBoolean(HAS_ONBOARDED, hasOnboarded).apply();
     }
 
     public static boolean hasLoadedApp() {

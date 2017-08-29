@@ -39,8 +39,11 @@ import com.toshi.model.local.Conversation;
 import com.toshi.model.local.Group;
 import com.toshi.model.local.Recipient;
 import com.toshi.model.local.User;
+import com.toshi.model.sofa.Init;
+import com.toshi.model.sofa.SofaAdapters;
 import com.toshi.model.sofa.SofaMessage;
 import com.toshi.util.FileNames;
+import com.toshi.util.LocaleUtil;
 import com.toshi.view.BaseApplication;
 
 import org.whispersystems.signalservice.internal.push.SignalServiceUrl;
@@ -94,6 +97,19 @@ public final class SofaMessageManager {
     // but not store the message in the local database
     public final void sendMessage(final Recipient recipient, final SofaMessage message) {
         final SofaMessageTask messageTask = new SofaMessageTask(recipient, message, SofaMessageTask.SEND_ONLY);
+        this.messageSender.addNewTask(messageTask);
+    }
+
+    // Will send an init message to remote peer
+    public final void sendInitMessage(final Recipient recipient) {
+        final User user = recipient.getUser();
+        final Init initMessage = new Init().construct(
+                user.getPaymentAddress(),
+                LocaleUtil.getLocale().getLanguage()
+        );
+        final String messageBody = SofaAdapters.get().toJson(initMessage);
+        final SofaMessage sofaMessage = new SofaMessage().makeNew(user, messageBody);
+        final SofaMessageTask messageTask = new SofaMessageTask(recipient, sofaMessage, SofaMessageTask.SEND_INIT);
         this.messageSender.addNewTask(messageTask);
     }
 
@@ -198,7 +214,6 @@ public final class SofaMessageManager {
                 trustStore);
         this.signalServiceUrls[0] = signalServiceUrl;
         this.chatService = new ChatService(this.signalServiceUrls, this.wallet, this.protocolStore, this.userAgent);
-
     }
 
     private void initMessageReceiver() {

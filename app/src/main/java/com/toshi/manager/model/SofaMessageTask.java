@@ -25,13 +25,14 @@ import com.toshi.model.sofa.SofaMessage;
 
 public final class SofaMessageTask {
 
-    @IntDef({SEND_AND_SAVE, SAVE_ONLY, SEND_ONLY, UPDATE_MESSAGE, SAVE_TRANSACTION})
+    @IntDef({SEND_AND_SAVE, SAVE_ONLY, SEND_ONLY, UPDATE_MESSAGE, SAVE_TRANSACTION, SEND_INIT})
     public @interface Action {}
     public static final int SEND_AND_SAVE = 0;
     public static final int SAVE_ONLY = 1;
     public static final int SEND_ONLY = 2;
     public static final int UPDATE_MESSAGE = 3;
     public static final int SAVE_TRANSACTION = 4;
+    public static final int SEND_INIT = 5;
 
     private final Recipient receiver;
     private final SofaMessage sofaMessage;
