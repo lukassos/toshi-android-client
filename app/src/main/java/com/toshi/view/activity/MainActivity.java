@@ -18,7 +18,6 @@
 package com.toshi.view.activity;
 
 
-import android.content.Intent;
 import android.databinding.DataBindingUtil;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
@@ -30,7 +29,6 @@ import com.toshi.presenter.LoaderIds;
 import com.toshi.presenter.MainPresenter;
 import com.toshi.presenter.factory.MainPresenterFactory;
 import com.toshi.presenter.factory.PresenterFactory;
-import com.toshi.service.RegistrationIntentService;
 import com.toshi.view.custom.OfflineViewRenderer;
 
 public class MainActivity
@@ -45,7 +43,6 @@ public class MainActivity
     public void onCreate(final Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         init();
-        startGcmRegistration();
     }
 
     private void init() {
@@ -70,11 +67,6 @@ public class MainActivity
 
     public final ActivityMainBinding getBinding() {
         return this.binding;
-    }
-
-    private void startGcmRegistration() {
-        final Intent intent = new Intent(this, RegistrationIntentService.class);
-        startService(intent);
     }
 
     @Override

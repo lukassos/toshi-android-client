@@ -40,12 +40,11 @@ import com.toshi.R;
 import com.toshi.crypto.HDWallet;
 import com.toshi.crypto.signal.model.DecryptedSignalMessage;
 import com.toshi.crypto.util.TypeConverter;
-import com.toshi.manager.ToshiManager;
 import com.toshi.model.local.Recipient;
-import com.toshi.model.sofa.SofaMessage;
 import com.toshi.model.local.User;
 import com.toshi.model.sofa.Payment;
 import com.toshi.model.sofa.SofaAdapters;
+import com.toshi.model.sofa.SofaMessage;
 import com.toshi.model.sofa.SofaType;
 import com.toshi.util.EthUtil;
 import com.toshi.util.LogUtil;
@@ -58,6 +57,7 @@ import java.math.BigInteger;
 import java.util.Locale;
 import java.util.concurrent.TimeoutException;
 
+import rx.Completable;
 import rx.Single;
 
 public class GcmMessageReceiver extends GcmListenerService {
@@ -68,7 +68,7 @@ public class GcmMessageReceiver extends GcmListenerService {
 
         tryInitApp()
         .subscribe(
-                __ -> handleIncomingMessage(data),
+                () -> handleIncomingMessage(data),
                 this::handleIncomingMessageError
         );
     }
@@ -77,7 +77,7 @@ public class GcmMessageReceiver extends GcmListenerService {
         LogUtil.exception(getClass(), "Error during incoming message", throwable);
     }
 
-    private Single<ToshiManager> tryInitApp() {
+    private Completable tryInitApp() {
         return BaseApplication
                 .get()
                 .getToshiManager()

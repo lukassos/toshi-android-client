@@ -27,7 +27,6 @@ import android.widget.Toast;
 import com.google.common.base.Joiner;
 import com.toshi.R;
 import com.toshi.crypto.HDWallet;
-import com.toshi.manager.ToshiManager;
 import com.toshi.util.LogUtil;
 import com.toshi.util.SharedPrefsUtil;
 import com.toshi.view.BaseApplication;
@@ -41,7 +40,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-import rx.Single;
+import rx.Completable;
 import rx.Subscription;
 import rx.android.schedulers.AndroidSchedulers;
 import rx.schedulers.Schedulers;
@@ -152,13 +151,13 @@ public class SignInPresenter implements Presenter<SignInActivity> {
         final Subscription sub =
                 new HDWallet()
                 .createFromMasterSeed(masterSeed)
-                .flatMap(this::initWallet)
+                .flatMapCompletable(this::initWallet)
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
-                .doOnSuccess(__ -> SharedPrefsUtil.setHasBackedUpPhrase())
+                .doOnCompleted(SharedPrefsUtil::setHasBackedUpPhrase)
                 .subscribe(
-                        __ -> handleWalletSuccess(),
-                        __ -> handleWalletError()
+                        this::handleWalletSuccess,
+                        this::handleWalletError
                 );
 
         this.subscriptions.add(sub);
@@ -169,7 +168,7 @@ public class SignInPresenter implements Presenter<SignInActivity> {
         this.activity.getBinding().loadingSpinner.setVisibility(View.VISIBLE);
     }
 
-    private Single<ToshiManager> initWallet(final HDWallet wallet) {
+    private Completable initWallet(final HDWallet wallet) {
         return BaseApplication
                 .get()
                 .getToshiManager()
@@ -189,7 +188,8 @@ public class SignInPresenter implements Presenter<SignInActivity> {
         ActivityCompat.finishAffinity(this.activity);
     }
 
-    private void handleWalletError() {
+    private void handleWalletError(final Throwable throwable) {
+        LogUtil.e(getClass(), "Unable to restore wallet " + throwable.toString());
         showToast(R.string.unable_to_restore_wallet);
         stopLoadingTask();
     }

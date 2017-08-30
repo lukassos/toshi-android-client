@@ -75,7 +75,7 @@ public class SplashPresenter implements Presenter<SplashActivity> {
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe(
-                        __ -> goToAnotherActivity(),
+                        this::goToAnotherActivity,
                         __ -> goToLandingActivity()
                 );
 

@@ -89,7 +89,7 @@ public class LandingPresenter implements Presenter<LandingActivity> {
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe(
-                        __ -> handleWalletSuccess(),
+                        this::handleWalletSuccess,
                         this::handleWalletError
                 );
 
