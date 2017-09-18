@@ -281,7 +281,7 @@ public class BalanceManager {
         return Completable.fromAction(() -> EthereumService.get().changeBaseUrl(network.getUrl()));
     }
 
-    private Completable registerGcm(final boolean forceUpdate) {
+    public Completable registerGcm(final boolean forceUpdate) {
         return GcmUtil
                 .getGcmToken()
                 .flatMapCompletable(token -> registerEthereumServiceGcmToken(token, forceUpdate));

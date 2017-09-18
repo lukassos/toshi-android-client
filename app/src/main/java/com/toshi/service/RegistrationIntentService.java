@@ -18,97 +18,34 @@
 package com.toshi.service;
 
 import android.app.IntentService;
-import android.content.Context;
 import android.content.Intent;
-import android.content.SharedPreferences;
-import android.support.v4.content.LocalBroadcastManager;
 
-import com.google.android.gms.gcm.GoogleCloudMessaging;
-import com.google.android.gms.iid.InstanceID;
-import com.toshi.R;
-import com.toshi.util.FileNames;
-import com.toshi.util.LogUtil;
 import com.toshi.view.BaseApplication;
-
-import rx.schedulers.Schedulers;
 
 public class RegistrationIntentService extends IntentService {
 
     public static final String FORCE_UPDATE = "update_token";
     public static final String ETH_REGISTRATION_ONLY = "eth_registration_only";
 
-    public static final String CHAT_SERVICE_SENT_TOKEN_TO_SERVER = "chatServiceSentTokenToServer";
-    public static final String ETH_SERVICE_SENT_TOKEN_TO_SERVER = "sentTokenToServer_v2";
-    public static final String REGISTRATION_COMPLETE = "registrationComplete";
-
-    private final SharedPreferences sharedPreferences;
-
     public RegistrationIntentService() {
         super("RegIntentService");
-        this.sharedPreferences = BaseApplication.get().getSharedPreferences(FileNames.GCM_PREFS, Context.MODE_PRIVATE);
     }
 
     @Override
     protected void onHandleIntent(final Intent intent) {
-        try {
-            final InstanceID instanceID = InstanceID.getInstance(this);
-            final String token = instanceID.getToken(getString(R.string.gcm_defaultSenderId),
-                    GoogleCloudMessaging.INSTANCE_ID_SCOPE, null);
-            LogUtil.i(getClass(), "GCM Registration token: " + token);
-
-            final boolean forceUpdate = intent.getBooleanExtra(FORCE_UPDATE, false);
-            final boolean ethRegistrationOnly = intent.getBooleanExtra(ETH_REGISTRATION_ONLY, false);
-            if (ethRegistrationOnly) {
-                registerEthereumServiceGcmToken(token, forceUpdate);
-            } else {
-                registerEthereumServiceGcmToken(token, forceUpdate);
-                registerChatServiceGcm(token, forceUpdate);
-            }
-        } catch (final Exception ex) {
-            LogUtil.d(getClass(), "Failed to complete token refresh" + ex);
-            sharedPreferences.edit().putBoolean(ETH_SERVICE_SENT_TOKEN_TO_SERVER, false).apply();
-        }
-
-        final Intent registrationComplete = new Intent(REGISTRATION_COMPLETE);
-        LocalBroadcastManager.getInstance(this).sendBroadcast(registrationComplete);
-    }
-
-    private void registerChatServiceGcm(final String token, final boolean forceUpdate) {
-        final boolean sentToServer = sharedPreferences.getBoolean(CHAT_SERVICE_SENT_TOKEN_TO_SERVER, false);
-        if (!forceUpdate && sentToServer) {
+        final boolean forceUpdate = intent.getBooleanExtra(FORCE_UPDATE, false);
+        final boolean ethRegistrationOnly = intent.getBooleanExtra(ETH_REGISTRATION_ONLY, false);
+        if (ethRegistrationOnly) {
+            BaseApplication
+                    .get()
+                    .getBalanceManager()
+                    .registerGcm(forceUpdate);
             return;
         }
 
         BaseApplication
                 .get()
                 .getSofaMessageManager()
-                .setGcmToken(token);
-    }
-
-    private void registerEthereumServiceGcmToken(final String token, final boolean forceUpdate) {
-        final boolean sentToServer = sharedPreferences.getBoolean(ETH_SERVICE_SENT_TOKEN_TO_SERVER, false);
-        if (!forceUpdate && sentToServer) {
-            return;
-        }
-
-        BaseApplication
-                .get()
-                .getBalanceManager()
-                .registerForGcm(token)
-                .subscribeOn(Schedulers.io())
-                .observeOn(Schedulers.io())
-                .subscribe(
-                        this::handleGcmSuccess,
-                        this::handleGcmFailure
-                );
-    }
-
-    public void handleGcmSuccess(final Void unused) {
-        this.sharedPreferences.edit().putBoolean(ETH_SERVICE_SENT_TOKEN_TO_SERVER, true).apply();
-    }
-
-    public void handleGcmFailure(final Throwable error) {
-        this.sharedPreferences.edit().putBoolean(ETH_SERVICE_SENT_TOKEN_TO_SERVER, false).apply();
-        LogUtil.exception(getClass(), "Error while registering gcm", error);
+                .registerGcm(forceUpdate);
     }
 }
