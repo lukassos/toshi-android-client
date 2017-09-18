@@ -41,7 +41,6 @@ import com.toshi.model.local.Recipient;
 import com.toshi.model.local.User;
 import com.toshi.model.sofa.SofaMessage;
 import com.toshi.util.FileNames;
-import com.toshi.util.LogUtil;
 import com.toshi.view.BaseApplication;
 
 import org.whispersystems.signalservice.internal.push.SignalServiceUrl;
@@ -79,10 +78,9 @@ public final class SofaMessageManager {
         this.subscriptions = new CompositeSubscription();
     }
 
-    public final SofaMessageManager init(final HDWallet wallet) {
+    public final Completable init(final HDWallet wallet) {
         this.wallet = wallet;
-        new Thread(this::initEverything).start();
-        return this;
+        return initEverything();
     }
 
     // Will send the message to a remote peer
@@ -184,11 +182,11 @@ public final class SofaMessageManager {
                 .subscribeOn(Schedulers.io());
     }
 
-    private void initEverything() {
+    private Completable initEverything() {
         generateStores();
         initMessageReceiver();
         initMessageSender();
-        initRegistrationTask();
+        return initRegistrationTask();
     }
 
     private void generateStores() {
@@ -222,15 +220,17 @@ public final class SofaMessageManager {
         );
     }
 
-    private void initRegistrationTask() {
-        if (this.sofaGcmRegister != null) return;
+    private Completable initRegistrationTask() {
+        if (this.sofaGcmRegister != null) return Completable.complete();
         this.sofaGcmRegister = new SofaMessageRegistration(this.sharedPreferences, this.chatService, this.protocolStore);
-        this.sofaGcmRegister
+        return this.sofaGcmRegister
                 .registerIfNeeded()
-                .subscribe(
-                        this.messageReceiver::receiveMessagesAsync,
-                        ex -> LogUtil.e(getClass(), "Error during registration: " + ex)
-                );
+                .doOnCompleted(this::handleRegistrationCompleted);
+    }
+
+    private void handleRegistrationCompleted() {
+        if (this.messageReceiver == null) return;
+        this.messageReceiver.receiveMessagesAsync();
     }
 
     public Completable tryUnregisterGcm() {
@@ -240,12 +240,12 @@ public final class SofaMessageManager {
         return this.sofaGcmRegister.tryUnregisterGcm();
     }
 
-    public void setGcmToken(final String token) {
-        if (this.sofaGcmRegister == null) {
-            LogUtil.e(getClass(), "Unable to setGcmToken as class hasn't been initialised yet.");
-        }
-        this.sofaGcmRegister.setGcmToken(token);
-    }
+   public Completable registerGcm(final boolean forceUpdate) {
+       if (this.sofaGcmRegister == null) {
+           return Completable.error(new NullPointerException("Unable to register as class hasn't been initialised yet."));
+       }
+       return this.sofaGcmRegister.registerGcm(forceUpdate);
+   }
 
     public void resendPendingMessage(final SofaMessage sofaMessage) {
         this.messageSender.sendPendingMessage(sofaMessage);
