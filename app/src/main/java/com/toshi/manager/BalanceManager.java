@@ -19,7 +19,6 @@ package com.toshi.manager;
 
 
 import android.content.Context;
-import android.content.Intent;
 import android.content.SharedPreferences;
 
 import com.toshi.crypto.HDWallet;
@@ -34,7 +33,6 @@ import com.toshi.model.network.GcmDeregistration;
 import com.toshi.model.network.GcmRegistration;
 import com.toshi.model.network.ServerTime;
 import com.toshi.model.sofa.Payment;
-import com.toshi.service.RegistrationIntentService;
 import com.toshi.util.CurrencyUtil;
 import com.toshi.util.FileNames;
 import com.toshi.util.GcmUtil;
@@ -56,9 +54,11 @@ public class BalanceManager {
 
     private final static BehaviorSubject<Balance> balanceObservable = BehaviorSubject.create();
     private static final String LAST_KNOWN_BALANCE = "lkb";
+    private static final String ETH_SERVICE_SENT_TOKEN_TO_SERVER = "sentTokenToServer_v2";
 
     private HDWallet wallet;
     private SharedPreferences prefs;
+    private SharedPreferences gcmPrefs;
 
     /* package */ BalanceManager() {
     }
@@ -67,15 +67,16 @@ public class BalanceManager {
         return balanceObservable;
     }
 
-    public BalanceManager init(final HDWallet wallet) {
+    public Completable init(final HDWallet wallet) {
         this.wallet = wallet;
         initCachedBalance();
         attachConnectivityObserver();
-        return this;
+        return registerGcm(false);
     }
 
     private void initCachedBalance() {
         this.prefs = BaseApplication.get().getSharedPreferences(FileNames.BALANCE_PREFS, Context.MODE_PRIVATE);
+        this.gcmPrefs = BaseApplication.get().getSharedPreferences(FileNames.GCM_PREFS, Context.MODE_PRIVATE);
         final Balance cachedBalance = new Balance(readLastKnownBalance());
         handleNewBalance(cachedBalance);
     }
@@ -202,15 +203,6 @@ public class BalanceManager {
         });
     }
 
-    public Single<Void> registerForGcm(final String token) {
-        return EthereumService
-                .getApi()
-                .getTimestamp()
-                .subscribeOn(Schedulers.io())
-                .observeOn(Schedulers.io())
-                .flatMap((st) -> registerForGcmWithTimestamp(token, st));
-    }
-
     public Completable unregisterFromGcm(final String token) {
         return EthereumService
                 .getApi()
@@ -219,14 +211,15 @@ public class BalanceManager {
                 .flatMapCompletable((st) -> unregisterGcmWithTimestamp(token, st));
     }
 
-    private Single<Void> registerForGcmWithTimestamp(final String token, final ServerTime serverTime) {
+    private Completable registerForGcmWithTimestamp(final String token, final ServerTime serverTime) {
         if (serverTime == null) {
             throw new IllegalStateException("ServerTime was null");
         }
 
         return EthereumService
                 .getApi()
-                .registerGcm(serverTime.get(), new GcmRegistration(token, wallet.getPaymentAddress()));
+                .registerGcm(serverTime.get(), new GcmRegistration(token, wallet.getPaymentAddress()))
+                .toCompletable();
     }
 
     private Completable unregisterGcmWithTimestamp(final String token, final ServerTime serverTime) {
@@ -262,25 +255,16 @@ public class BalanceManager {
     public Completable changeNetwork(final Network network) {
         if (Networks.getInstance().onDefaultNetwork()) {
             return changeEthBaseUrl(network)
-                    .andThen(registerEthGcm())
+                    .andThen(registerGcm(true))
                     .subscribeOn(Schedulers.io())
                     .doOnCompleted(() -> SharedPrefsUtil.setCurrentNetwork(network));
         }
 
         return unregisterEthGcm()
                 .andThen(changeEthBaseUrl(network))
-                .andThen(registerEthGcm())
+                .andThen(registerGcm(true))
                 .subscribeOn(Schedulers.io())
                 .doOnCompleted(() -> SharedPrefsUtil.setCurrentNetwork(network));
-    }
-
-    private Completable registerEthGcm() {
-        return Completable.fromAction(() -> {
-            final Intent intent = new Intent(BaseApplication.get(), RegistrationIntentService.class)
-                    .putExtra(RegistrationIntentService.FORCE_UPDATE, true)
-                    .putExtra(RegistrationIntentService.ETH_REGISTRATION_ONLY, true);
-            BaseApplication.get().startService(intent);
-        });
     }
 
     private Completable unregisterEthGcm() {
@@ -295,6 +279,46 @@ public class BalanceManager {
 
     private Completable changeEthBaseUrl(final Network network) {
         return Completable.fromAction(() -> EthereumService.get().changeBaseUrl(network.getUrl()));
+    }
+
+    private Completable registerGcm(final boolean forceUpdate) {
+        return GcmUtil
+                .getGcmToken()
+                .flatMapCompletable(token -> registerEthereumServiceGcmToken(token, forceUpdate));
+    }
+
+    private Completable registerEthereumServiceGcmToken(final String token, final boolean forceUpdate) {
+        final boolean isSentToServer = this.gcmPrefs.getBoolean(ETH_SERVICE_SENT_TOKEN_TO_SERVER, false);
+        if (!forceUpdate && isSentToServer) {
+            return Completable.complete();
+        }
+
+        return BaseApplication
+                .get()
+                .getBalanceManager()
+                .registerForGcm(token)
+                .subscribeOn(Schedulers.io())
+                .observeOn(Schedulers.io())
+                .doOnCompleted(() -> setSentToSever(ETH_SERVICE_SENT_TOKEN_TO_SERVER, true))
+                .doOnError(this::handleGcmRegisterError);
+    }
+
+    private Completable registerForGcm(final String token) {
+        return EthereumService
+                .getApi()
+                .getTimestamp()
+                .subscribeOn(Schedulers.io())
+                .observeOn(Schedulers.io())
+                .flatMapCompletable((st) -> registerForGcmWithTimestamp(token, st));
+    }
+
+    private void handleGcmRegisterError(final Throwable throwable) {
+        LogUtil.exception(getClass(), "Error during registering of GCM " + throwable.getMessage());
+        setSentToSever(ETH_SERVICE_SENT_TOKEN_TO_SERVER, false);
+    }
+
+    private void setSentToSever(final String key, final boolean value) {
+        this.gcmPrefs.edit().putBoolean(key, value).apply();
     }
 
     public void clear() {
