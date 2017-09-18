@@ -44,6 +44,7 @@ import com.toshi.model.sofa.SofaAdapters;
 import com.toshi.model.sofa.SofaMessage;
 import com.toshi.util.FileNames;
 import com.toshi.util.LocaleUtil;
+import com.toshi.util.LogUtil;
 import com.toshi.view.BaseApplication;
 
 import org.whispersystems.signalservice.internal.push.SignalServiceUrl;
@@ -199,10 +200,34 @@ public final class SofaMessageManager {
     }
 
     private Completable initEverything() {
+        attachConnectivityObserver();
         generateStores();
         initMessageReceiver();
         initMessageSender();
         return initRegistrationTask();
+    }
+
+    private void attachConnectivityObserver() {
+        BaseApplication
+                .get()
+                .isConnectedSubject()
+                .subscribeOn(Schedulers.io())
+                .observeOn(Schedulers.io())
+                .skip(1)
+                .filter(isConnected -> isConnected)
+                .subscribe(
+                        __ -> handleConnectivity(),
+                        throwable -> LogUtil.exception(getClass(), "Error checking connection state", throwable)
+                );
+    }
+
+    private void handleConnectivity() {
+        redoRegistrationTask()
+                .subscribeOn(Schedulers.io())
+                .subscribe(
+                        () -> {},
+                        throwable -> LogUtil.exception(getClass(), "Error during registration task", throwable)
+                );
     }
 
     private void generateStores() {
@@ -238,6 +263,17 @@ public final class SofaMessageManager {
     private Completable initRegistrationTask() {
         if (this.sofaGcmRegister != null) return Completable.complete();
         this.sofaGcmRegister = new SofaMessageRegistration(this.sharedPreferences, this.chatService, this.protocolStore);
+        return registerSofaGcm();
+    }
+
+    private Completable redoRegistrationTask() {
+        if (this.sofaGcmRegister == null) {
+            this.sofaGcmRegister = new SofaMessageRegistration(this.sharedPreferences, this.chatService, this.protocolStore);
+        }
+        return registerSofaGcm();
+    }
+
+    private Completable registerSofaGcm() {
         return this.sofaGcmRegister
                 .registerIfNeeded()
                 .doOnCompleted(this::handleRegistrationCompleted);

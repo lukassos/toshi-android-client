@@ -27,11 +27,7 @@ import com.toshi.manager.network.IdService;
 import com.toshi.model.local.Recipient;
 import com.toshi.model.local.User;
 import com.toshi.model.network.UserSearchResults;
-import com.toshi.model.sofa.Init;
-import com.toshi.model.sofa.SofaAdapters;
-import com.toshi.model.sofa.SofaMessage;
 import com.toshi.util.GcmUtil;
-import com.toshi.util.LocaleUtil;
 import com.toshi.util.LogUtil;
 import com.toshi.util.SharedPrefsUtil;
 import com.toshi.view.BaseApplication;
@@ -39,7 +35,6 @@ import com.toshi.view.BaseApplication;
 import org.whispersystems.libsignal.util.guava.Optional;
 
 import java.io.IOException;
-import java.util.concurrent.TimeUnit;
 
 import rx.Completable;
 import rx.Single;
@@ -47,8 +42,8 @@ import rx.schedulers.Schedulers;
 
 public class SofaMessageRegistration {
 
-    private static final String ONBOARDING_BOT_NAME = "ToshiBot";
-    public static final String ONBOARDING_BOT_ID = "0xdc1eb58ae581c2e70dd5af5c454851fa2b24acd7";
+    private static final String ONBOARDING_BOT_NAME = "spambot7777";
+    public static final String ONBOARDING_BOT_ID = "0x8f9bdb7f562ccdedf3c24cf25e9cece9df62138b";
     private static final String CHAT_SERVICE_SENT_TOKEN_TO_SERVER = "chatServiceSentTokenToServer";
 
     private final SharedPreferences sharedPreferences;
@@ -76,23 +71,15 @@ public class SofaMessageRegistration {
                     .andThen(setRegisteredWithServer())
                     .andThen(registerGcm(true))
                     .andThen(tryTriggerOnboarding())
-                    .doOnSuccess(this::sendOnboardingMessageToOnboardingBot)
                     .toCompletable()
-                    .andThen(setHasOnboarded())
-                    .delay(1000, TimeUnit.MILLISECONDS); // Add small delay to wait for bot response
+                    .onErrorComplete();
         } else {
-            return registerGcm(false)
-                    .doOnCompleted(this::tryTriggerOnboarding);
+            return registerGcm(false);
         }
     }
 
     private boolean haveRegisteredWithServer() {
         return SignalPreferences.getRegisteredWithServer();
-    }
-
-    private Completable setHasOnboarded() {
-        SharedPrefsUtil.setHasOnboarded(true);
-        return Completable.complete();
     }
 
     private Completable setRegisteredWithServer() {
@@ -148,7 +135,9 @@ public class SofaMessageRegistration {
                 .flatMapIterable(users -> users)
                 .filter(user -> user.getUsernameForEditing().equals(ONBOARDING_BOT_NAME))
                 .toSingle()
-                .doOnError(this::handleOnboardingBotError)
+                .doOnSuccess(__ -> SharedPrefsUtil.setHasOnboarded(true))
+                .doOnSuccess(this::sendOnboardingMessageToOnboardingBot)
+                .doOnError(throwable -> LogUtil.exception(getClass(), "Error during sending onboarding message to bot", throwable))
                 .onErrorReturn(__ -> null);
     }
 
@@ -158,10 +147,6 @@ public class SofaMessageRegistration {
                 .get()
                 .getSofaMessageManager()
                 .sendInitMessage(new Recipient(onboardingBot));
-    }
-
-    private void handleOnboardingBotError(final Throwable throwable) {
-        LogUtil.exception(getClass(), "Error during sending onboarding message to bot", throwable);
     }
 
     public Completable tryUnregisterGcm() {

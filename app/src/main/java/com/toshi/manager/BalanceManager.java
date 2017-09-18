@@ -71,7 +71,8 @@ public class BalanceManager {
         this.wallet = wallet;
         initCachedBalance();
         attachConnectivityObserver();
-        return registerGcm(false);
+        return registerGcm(false)
+                .onErrorComplete();
     }
 
     private void initCachedBalance() {
@@ -87,14 +88,17 @@ public class BalanceManager {
                 .isConnectedSubject()
                 .subscribeOn(Schedulers.io())
                 .observeOn(Schedulers.io())
+                .skip(1)
+                .filter(isConnected -> isConnected)
                 .subscribe(
-                        __ -> this.refreshBalance(),
-                        this::handleConnectionStateError
+                        __ -> handleConnectivity(),
+                        throwable -> LogUtil.exception(getClass(), "Error checking connection state", throwable)
                 );
     }
 
-    private void handleConnectionStateError(final Throwable throwable) {
-        LogUtil.exception(getClass(), "Error checking connection state", throwable);
+    private void handleConnectivity() {
+        refreshBalance();
+        registerGcm(false);
     }
 
     public void refreshBalance() {
